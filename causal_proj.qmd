@@ -1,29 +1,24 @@
 ---
-title: 'Title'
-date: ''
+title: 'Effect of Missingess on Causal Inference'
+date: today
+date-format: long
 format: 
   baylor_theme-revealjs:
-    author: 'Author'
-    footer: 'Author'
+    author: ''
+    footer: 'Nathen Byford'
 ---
 
-## Quarto
+## Types of Missingness
 
-Quarto enables you to weave together content and executable code into a finished presentation. To learn more about Quarto presentations see <https://quarto.org/docs/presentations/>.
+1. Missing Completely at Random (MCAR)
+2. Missing at Random (MAR)
+3. Missing Not at Random (MNAR)
 
-## Bullets
+# Motivating Example
 
-When you click the **Render** button a document will be generated that includes:
+## Clinical Trial with dropout
 
--   Content authored with markdown
--   Output from executable code
+- Clinical trial data for depression medication
+    - Missing data not at random
+- Do Causal Inference methods provide biased results for complete case analysis compared to imputation?
 
-# Code
-
-## Basic code
-
-When you click the **Render** button a presentation will be generated that includes both content and the output of embedded code. You can embed code like this:
-
-```{r}
-1 + 1
-```
