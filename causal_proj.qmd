@@ -1,5 +1,5 @@
 ---
-title: 'Effect of Missingess on Causal Inference'
+title: 'Effect of Missing Not at Random on Causal Inference'
 date: today
 date-format: long
 format: 
@@ -7,6 +7,18 @@ format:
     author: ''
     footer: 'Nathen Byford'
 ---
+
+```{r}
+#| include: false
+
+library(tidyverse); theme_set(theme_bw())
+library(gtsummary)
+
+longi_score <- read_csv("data/longi_score_real_data.csv")
+
+complete_case <- read_csv("data/complete_case.csv")
+```
+
 
 ## Types of Missingness
 
@@ -21,4 +33,97 @@ format:
 - Clinical trial data for depression medication
     - Missing data not at random
 - Do Causal Inference methods provide biased results for complete case analysis compared to imputation?
+
+# Exploritory Data Analysis
+
+## Response overtime
+
+```{r}
+longi_score |> 
+  mutate(
+    "Incomplete" = ifelse(id %in% complete_case$id, FALSE, TRUE)
+  ) |> 
+  ggplot(aes(x = week, y = score)) +
+  geom_jitter(aes(shape = Incomplete, color = Incomplete), width = .15) +
+  geom_smooth() +
+  facet_wrap(~treat) +
+  scale_color_manual(values = c("black", "red")) +
+  scale_shape_manual(values = c(16, 4)) +
+  labs(title = "Weekly Response with all Observed Values") +
+  theme(legend.position = "bottom")
+```
+
+## Response overtime
+
+```{r}
+complete_case |> 
+  ggplot(aes(x = week, y = score)) +
+  geom_jitter(width = 0.15) +
+  geom_smooth() +
+  facet_wrap(~treat) +
+  labs(title = "Weekly Response with only Complete Case") +
+  theme(legend.position = "none")
+```
+
+
+# Complete case Analysis
+
+## Difference in Means
+
+
+## Difference-in-Difference (DID)
+
+Using DID we can estimate the causal effect using the differences of treated and untreated at week 1 and week 6.
+
+- The DID estimator is not significant with an estimated 95% CI of -1.0 to 0.36
+
+```{r}
+#| tbl-cap: "Difference in difference regression estimates"
+
+complete_data <- complete_case |> 
+  filter(week %in% c(1, 6))
+
+did_reg <- lm(score ~ treat + week + DID, 
+              data = complete_data)
+
+tbl_regression(did_reg)
+```
+
+
+## Propensity Score Analysis
+
+```{r}
+
+ps_mod <- complete_case |> 
+  filter(week == 1) |> 
+  glm(treat ~ sex + cfb, family = "binomial", data = _)
+
+ps <- as.numeric(predict(ps_mod, type = "response"))
+ps_df <- tibble(id = unique(complete_case$id), ps)
+
+complete_ps <- left_join(complete_case, ps_df, by = "id", copy = TRUE)
+
+# complete_ps |> 
+#   ggplot(aes(x = ps)) +
+#   geom_histogram() +
+#   facet_wrap(~treat) +
+#   labs(x = "Probability of Treatment")
+
+complete_ps |> 
+  ggplot(aes(x = ps, y = score)) + 
+  geom_point() +
+  geom_smooth()
+```
+
+# Imputed Data
+
+```{r}
+imput_data <- read_csv("data/pred_real_data.csv")
+
+imputed_values <- imput_data |> 
+  summarise(
+    value = mean(predict),
+    .by = c(id, week)
+  )
+```
 
