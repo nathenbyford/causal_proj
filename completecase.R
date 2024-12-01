@@ -64,3 +64,64 @@ did_reg <- lm(hama_total ~ treat + week + did,
 summary(did_reg)
 
 tbl_regression(did_reg)
+
+
+
+# NHANES ------------------------------------------------------------------
+
+library("NHANES")
+data(NHANES)
+
+colnames(NHANES)
+
+dim(NHANES)
+
+N <- length(unique(NHANES$ID))
+
+data <- longi_score |> 
+  group_by(id) |> 
+  na.omit() |> 
+  janitor::clean_names()
+
+nhanes <- NHANES |> 
+  group_by(ID)
+
+n_complete <- nhanes |>
+  filter(week %in% c(1, 6)) |> 
+  summarise(
+    first_and_last = n() == 2
+  ) |> 
+  pull(first_and_last) |> 
+  sum()
+
+complete_id <- data |>
+  filter(week %in% c(1, 6)) |> 
+  summarise(
+    first_and_last = n() == 2
+  ) |> 
+  filter(first_and_last) |> 
+  pull(id)
+
+complete_data <- longi_score |> 
+  filter(
+    id %in% complete_id
+  ) |> 
+  mutate(DID = week * treat)
+
+write_csv(complete_data, file = "data/complete_case.csv")
+
+
+
+# nhefs -------------------------------------------------------------------
+
+nhefs <- read_csv("data/nhefs.csv")
+
+N <- length(unique(nhefs$seqn))
+
+nhefs |> 
+  summarise(
+    smk_intensity_82 = sum(is.na(smkintensity82_71)),
+    wt_82 = sum(is.na(wt82)),
+    tax_82 = sum(is.na(tax82)),
+    .by = death
+  )

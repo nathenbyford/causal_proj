@@ -117,6 +117,10 @@ complete_ps |>
 
 # Imputed Data
 
+
+## Imputed values
+
+
 ```{r}
 imput_data <- read_csv("data/pred_real_data.csv")
 
@@ -125,5 +129,50 @@ imputed_values <- imput_data |>
     value = mean(predict),
     .by = c(id, week)
   )
+
+new_data <- left_join(longi_score, imputed_values, by = c("id", "week")) |> 
+  mutate(score = if_else(is.na(score), value, score)) |> 
+  select(-value)
+
+new_data |> 
+  ggplot(aes(x = week, y = score)) +
+  geom_jitter(width = .15) +
+  geom_smooth(se = FALSE) +
+  geom_smooth(data = longi_score, color = "red", se = FALSE) +
+  facet_wrap(~treat) +
+  labs(title = "Weekly Response with Imputed Values")
+```
+
+## Imputed DID
+
+Using DID we can estimate the causal effect using the differences of treated and untreated at week 1 and week 6.
+
+- The DID estimator is not significant with an estimated 95% CI of -1.0 to 0.36
+
+```{r}
+#| tbl-cap: "Difference in difference regression estimates with imputed values"
+
+
+
+did_reg <- new_data |> 
+  filter(week %in% c(1, 6)) |>
+  mutate("DID" = treat * week) |> 
+  lm(score ~ treat + week + DID, 
+              data = _)
+
+tbl_regression(did_reg)
+```
+
+# Observational Study
+
+## NHANES
+
+- The NHANES data overview
+
+```{r}
+library("NHANES")
+data(NHANES)
+
+
 ```
 
