@@ -182,6 +182,19 @@ framingham |>
   ) |> 
   arrange(PERIOD) |> 
   rename(Exam = PERIOD) |> 
-  knitr::kable()
+  gt::gt()
+```
+
+## DID
+
+- 
+
+```{r}
+fram_did <- framingham |> 
+  filter(PERIOD %in% c(1, 2)) |> 
+  mutate(DID = PERIOD * CIGPDAY) |> 
+  glm(CVD ~ CIGPDAY + PERIOD + DID, data = _, family = "binomial")
+
+summary(fram_did)
 ```
 
