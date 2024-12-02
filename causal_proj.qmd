@@ -165,14 +165,23 @@ tbl_regression(did_reg)
 
 # Observational Study
 
-## NHANES
+## Framingham Heart Study
 
-- The NHANES data overview
+- Long term prospective study of cardiovascular disease. 
+- 5,209 subject initially enrolled in the study
 
 ```{r}
-library("NHANES")
-data(NHANES)
+library(riskCommunicator)
+data("framingham")
 
 
+framingham |> 
+  summarise(
+    count = n(),
+    .by = PERIOD
+  ) |> 
+  arrange(PERIOD) |> 
+  rename(Exam = PERIOD) |> 
+  knitr::kable()
 ```
 

@@ -125,3 +125,55 @@ nhefs |>
     tax_82 = sum(is.na(tax82)),
     .by = death
   )
+
+nhefs |> 
+  pivot_longer(
+    cols = c(wt71, wt82), 
+    names_to = "Year", 
+    values_to = "Weight",
+    names_prefix = "wt"
+  ) |> 
+  mutate(
+    missing = if_else(is.na(Weight), 1, 0)
+  ) |> 
+  relocate(Year, Weight, missing) |> 
+  ggplot(aes(x = Year, y = Weight)) +
+  geom_point(aes(color = death)) +
+  facet_wrap(~qsmk)
+
+
+# Framingham --------------------------------------------------------------
+
+library(riskCommunicator)
+data("framingham")
+
+framingham |> 
+  summarise(
+    count = n(),
+    .by = PERIOD
+  ) |> 
+  arrange(PERIOD) |> 
+  rename(Exam = PERIOD) |> 
+  knitr::kable()
+
+framingham |> 
+  summarise(
+    count = n(),
+    .by = CURSMOKE
+  )
+
+framingham |> 
+  summarise(
+    count = n(),
+    .by = c(CURSMOKE, CVD)
+  )
+
+framingham |> 
+  ggplot(aes(x = PERIOD, y = BMI)) +
+  geom_jitter(width = .15)
+
+framingham |> 
+  mutate(time_period = as.factor(PERIOD)) |> 
+  ggplot(aes(y = time_period, x = BMI)) +
+  ggridges::geom_density_ridges(aes(fill = time_period), alpha = .7) +
+  scale_fill_viridis_d(begin = 0.5)
