@@ -177,3 +177,40 @@ framingham |>
   ggplot(aes(y = time_period, x = BMI)) +
   ggridges::geom_density_ridges(aes(fill = time_period), alpha = .7) +
   scale_fill_viridis_d(begin = 0.5)
+
+
+
+# Simulation data ---------------------------------------------------------
+
+longi_sim <- read_csv("data/longi_score_sim.csv")
+
+N <- length(unique(longi_sim$id))
+
+sim <- longi_sim |> 
+  group_by(id) |> 
+  na.omit() |> 
+  janitor::clean_names()
+
+n_complete_sim <- sim |>
+  filter(week %in% c(0, 16)) |> 
+  summarise(
+    first_and_last = n() == 2
+  ) |> 
+  pull(first_and_last) |> 
+  sum()
+
+complete_sim_id <- sim |>
+  filter(week %in% c(0, 16)) |> 
+  summarise(
+    first_and_last = n() == 2
+  ) |> 
+  filter(first_and_last) |> 
+  pull(id)
+
+complete_sim <- longi_sim |> 
+  filter(
+    id %in% complete_sim_id
+  ) |> 
+  mutate(DID = week * treat)
+
+write_csv(complete_sim, file = "data/complete_sim.csv")

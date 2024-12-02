@@ -22,9 +22,13 @@ complete_case <- read_csv("data/complete_case.csv")
 
 ## Types of Missingness
 
+3 Types of Missingness commonly observed:
+
 1. Missing Completely at Random (MCAR)
 2. Missing at Random (MAR)
 3. Missing Not at Random (MNAR)
+
+- Best case is MCAR
 
 # Motivating Example
 
@@ -51,18 +55,6 @@ longi_score |>
   scale_shape_manual(values = c(16, 4)) +
   labs(title = "Weekly Response with all Observed Values") +
   theme(legend.position = "bottom")
-```
-
-## Response overtime
-
-```{r}
-complete_case |> 
-  ggplot(aes(x = week, y = score)) +
-  geom_jitter(width = 0.15) +
-  geom_smooth() +
-  facet_wrap(~treat) +
-  labs(title = "Weekly Response with only Complete Case") +
-  theme(legend.position = "none")
 ```
 
 ## Treatment
@@ -153,8 +145,6 @@ tbl_regression(wls)
 
 
 ## Imputed values
-
-- Blue line is fit on imputed values, red line is 
 
 ```{r}
 imput_data <- read_csv("data/pred_real_data.csv")
@@ -269,3 +259,160 @@ all_patient_periods <- expand.grid(unique(fram_12$RANDID), unique(fram_12$PERIOD
 
 ```
 
+
+# Simulated Data
+
+## Simulated data Missingness
+
+:::{.columns}
+
+::::{.column width="70%"}
+
+- Simulated data for a 16 week study with bi-weekly checkups
+    - No missing values until week 10
+    - Each week of missing values was split 45:75 between treated and untreated
+
+```{r}
+#| eval: false
+
+
+longi_sim |> 
+  summarise(
+    `NA count` = sum(is.na(score)),
+    .by = treat
+  ) |> 
+  gt::gt()
+```
+
+::::
+
+::::{.column width="30%"}
+```{r}
+longi_sim <- read_csv("data/longi_score_sim.csv")
+
+longi_sim |> 
+  summarise(
+    `NA count` = sum(is.na(score)),
+    .by = week
+  ) |> 
+  rename("Week" = week) |> 
+  gt::gt()
+```
+::::
+
+:::
+
+## Plots
+
+```{r}
+longi_sim |> 
+  ggplot(aes(x = week, y = score)) +
+  geom_jitter(width = .25) + 
+  geom_smooth(method = "loess") +
+  facet_wrap(~treat)
+```
+
+
+## Difference-in-Difference (DID)
+
+Using DID we can estimate the causal effect using the differences of treated and untreated at week 1 and week 6.
+
+- The DID estimator is not significant with an estimated 95% CI of -1.0 to 0.36
+
+```{r}
+
+complete_case_sim <- read_csv("data/complete_sim.csv")
+
+complete_sim <- complete_case_sim |> 
+  filter(week %in% c(0, 16))
+
+did_sim <- lm(score ~ treat + week + DID, 
+              data = complete_sim)
+
+tbl_regression(did_sim)
+```
+
+
+## IP-weighting
+
+```{r}
+
+ps_mod_sim <- complete_sim |> 
+  filter(week %in% c(0, 16)) |> 
+  glm(treat ~ sex + weight + base, family = "binomial", data = _)
+
+ps_sim <- as.numeric(predict(ps_mod_sim, type = "response"))
+
+wls_sim <- complete_sim |> 
+  filter(week %in% c(0, 16)) |> 
+  lm(score ~ treat + week + DID, 
+              data = _, weights = ps_sim)
+
+tbl_regression(wls_sim)
+```
+
+## Imputed values
+
+```{r}
+imput_sim <- read_csv("data/pred_sim.csv")
+
+imputed_values <- imput_data |> 
+  summarise(
+    value = mean(predict),
+    .by = c(id, week)
+  )
+
+new_data <- left_join(longi_score, imputed_values, by = c("id", "week")) |> 
+  mutate(score = if_else(is.na(score), value, score)) |> 
+  select(-value)
+
+new_data |> 
+  ggplot(aes(x = week, y = score)) +
+  geom_jitter(width = .15) +
+  geom_smooth(aes(color = "Imputed"), se = FALSE) +
+  geom_smooth(data = longi_score, se = FALSE, aes(color = "Complete case")) +
+  facet_wrap(~treat) +
+  labs(title = "Weekly Response with Imputed Values",
+       color = "Line") +
+  scale_color_manual(values = c("cornflowerblue", "forestgreen")) +
+  theme(legend.position = "bottom")
+```
+
+## Imputed DID
+
+Using DID we can estimate the causal effect using the differences of treated and untreated at week 1 and week 6.
+
+- The DID estimator is not significant with an estimated 95% CI of -1.0 to 0.36
+
+```{r}
+#| tbl-cap: "Difference in difference regression estimates with imputed values"
+
+
+
+did_reg <- new_data |> 
+  filter(week %in% c(1, 6)) |>
+  mutate("DID" = treat * week) |> 
+  lm(score ~ treat + week + DID, 
+              data = _)
+
+tbl_regression(did_reg)
+```
+
+## Imputed IP-weighting
+
+```{r}
+
+ps_mod_i <- new_data |> 
+  filter(week %in% c(1, 6)) |> 
+  glm(treat ~ sex + base, family = "binomial", data = _)
+
+ps_i <- as.numeric(predict(ps_mod_i, type = "response"))
+
+wls_i <- new_data |> 
+  filter(week %in% c(1, 6)) |> 
+  mutate("DID" = treat * week) |> 
+  lm(score ~ treat + week + DID, 
+              data = _, weights = ps_i)
+
+tbl_regression(wls_i)
+```
