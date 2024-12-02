@@ -65,6 +65,19 @@ complete_case |>
   theme(legend.position = "none")
 ```
 
+## Treatment
+
+```{r}
+longi_score |> 
+  pivot_longer(
+    cols = c(base, `HAMA TOTAL`, cfb),
+    names_to = "measure",
+    values_to = "value") |> 
+  ggplot(aes(x = value, group = treat)) +
+  geom_density(aes(fill = treat), alpha = .9) +
+  facet_wrap(~measure)
+```
+
 
 # Complete case Analysis
 
@@ -90,29 +103,50 @@ tbl_regression(did_reg)
 ```
 
 
-## Propensity Score Analysis
+## IP-weighting
+
+```{r}
+#| eval: false
+library(gfoRmula)
+
+data_cont_time <- complete_case |> 
+  mutate(week = case_when(
+    week == 4 ~ 3,
+    week == 6 ~ 4,
+    .default = week
+  ))
+
+gfoRmula::gformula(
+  obs_data = data_cont_time,
+  id = "id",
+  time_name = "week",
+  covnames = c("hamatotl_locf", "cfb"),
+  covparams = list(
+    hamatotl_locf ~ base + week,
+    cfb ~ base + week
+  ),
+  covtypes = c("normal", "normal"),
+  outcome_name = "score",
+  outcome_type = "continuous_eof",
+  ymodel = score ~ treat + week + hamatotl_locf + cfb,
+  seed = 1234
+)
+
+```
+
 
 ```{r}
 
 ps_mod <- complete_case |> 
-  filter(week == 1) |> 
-  glm(treat ~ sex + cfb, family = "binomial", data = _)
+  filter(week %in% c(1, 6)) |> 
+  glm(treat ~ sex + cfb + base, family = "binomial", data = _)
 
 ps <- as.numeric(predict(ps_mod, type = "response"))
-ps_df <- tibble(id = unique(complete_case$id), ps)
 
-complete_ps <- left_join(complete_case, ps_df, by = "id", copy = TRUE)
+wls <- lm(score ~ treat + week + DID, 
+              data = complete_data, weights = ps)
 
-# complete_ps |> 
-#   ggplot(aes(x = ps)) +
-#   geom_histogram() +
-#   facet_wrap(~treat) +
-#   labs(x = "Probability of Treatment")
-
-complete_ps |> 
-  ggplot(aes(x = ps, y = score)) + 
-  geom_point() +
-  geom_smooth()
+tbl_regression(wls)
 ```
 
 # Imputed Data
@@ -120,6 +154,7 @@ complete_ps |>
 
 ## Imputed values
 
+- Blue line is fit on imputed values, red line is 
 
 ```{r}
 imput_data <- read_csv("data/pred_real_data.csv")
@@ -137,10 +172,13 @@ new_data <- left_join(longi_score, imputed_values, by = c("id", "week")) |>
 new_data |> 
   ggplot(aes(x = week, y = score)) +
   geom_jitter(width = .15) +
-  geom_smooth(se = FALSE) +
-  geom_smooth(data = longi_score, color = "red", se = FALSE) +
+  geom_smooth(aes(color = "Imputed"), se = FALSE) +
+  geom_smooth(data = longi_score, se = FALSE, aes(color = "Complete case")) +
   facet_wrap(~treat) +
-  labs(title = "Weekly Response with Imputed Values")
+  labs(title = "Weekly Response with Imputed Values",
+       color = "Line") +
+  scale_color_manual(values = c("cornflowerblue", "forestgreen")) +
+  theme(legend.position = "bottom")
 ```
 
 ## Imputed DID
@@ -162,6 +200,26 @@ did_reg <- new_data |>
 
 tbl_regression(did_reg)
 ```
+
+## Imputed IP-weighting
+
+```{r}
+
+ps_mod_i <- new_data |> 
+  filter(week %in% c(1, 6)) |> 
+  glm(treat ~ sex + base, family = "binomial", data = _)
+
+ps_i <- as.numeric(predict(ps_mod_i, type = "response"))
+
+wls_i <- new_data |> 
+  filter(week %in% c(1, 6)) |> 
+  mutate("DID" = treat * week) |> 
+  lm(score ~ treat + week + DID, 
+              data = _, weights = ps_i)
+
+tbl_regression(wls_i)
+```
+
 
 # Observational Study
 
@@ -187,14 +245,27 @@ framingham |>
 
 ## DID
 
-- 
+- Q: Does Smoking effect the probability of Cardiovascular Disease?
 
 ```{r}
 fram_did <- framingham |> 
   filter(PERIOD %in% c(1, 2)) |> 
-  mutate(DID = PERIOD * CIGPDAY) |> 
-  glm(CVD ~ CIGPDAY + PERIOD + DID, data = _, family = "binomial")
+  mutate(DID = PERIOD * CURSMOKE) |> 
+  glm(CVD ~ CURSMOKE + PERIOD + DID, data = _, family = "binomial")
 
-summary(fram_did)
+tbl_regression(fram_did, exponentiate = TRUE)
+```
+
+## Imputed Framingham
+
+```{r}
+fram_12 <- framingham |> 
+  filter(PERIOD %in% c(1, 2))
+
+all_patient_periods <- expand.grid(unique(fram_12$RANDID), unique(fram_12$PERIOD))
+
+# nrow(all_patient_periods) - nrow(fram_12)
+
+
 ```
 
