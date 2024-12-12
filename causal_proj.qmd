@@ -1,5 +1,5 @@
 ---
-title: 'Effect of Missing Not at Random on Causal Inference'
+title: 'Examining How Missing Data Affects Causal Inference with Diff-in-Diff and IP-Weighting'
 date: today
 date-format: long
 format: 
@@ -27,13 +27,13 @@ complete_case <- read_csv("data/complete_case.csv")
 2. Missing at Random (MAR)
 3. Missing Not at Random (MNAR)
 
-> MCAR is best case and induces minimal bias using classical techniques, while MNAR is worst case and the missing data has a pattern to it.
+> MCAR is best case and induces minimal bias using classical techniques, while MNAR is worst case and the missing data has a pattern to it. @little_statistical_2019
 
 # Motivating Example
 
 ## Clinical Trial with dropout
 
-- Clinical trial data for depression medication
+- Clinical trial data for anxiety medication
     - Missing data not at random
     - Often the case in clinical trials
 - Using a new machine learning imputation methods @haliduola_missing_2022 were able to impute MNAR data.
@@ -55,7 +55,8 @@ Complete case
 :::{.columns}
 ::::{.column width="70%"}
 
-<br>
+- Score is based on HAMA (Hamilton Anxiety Rating Scale)
+    - Lower is better
 
 ```{r}
 
@@ -86,17 +87,21 @@ longi_score |>
   ) |> 
   rename("Treatment" = treat) |> 
   flextable::flextable()
-```
 
-<br>
-
-```{r}
 longi_score |> 
   summarise(
     `NA count` = sum(is.na(score)),
     .by = week
   ) |> 
   rename("Week" = week) |> 
+  flextable::flextable()
+
+longi_score |> 
+  summarise(
+    `NA count` = sum(is.na(score)),
+    .by = sex
+  ) |> 
+  rename("Sex" = sex) |> 
   flextable::flextable()
 ```
 ::::
@@ -127,12 +132,12 @@ complete_case |>
 longi_score |> 
   filter(week == 0) |> 
   pivot_longer(
-    cols = c(base, `HAMA TOTAL`, score),
+    cols = c(base, `PGI IMPROVEMENT`, sex),
     names_to = "measure",
     values_to = "value") |> 
   ggplot(aes(x = value, group = as.factor(treat))) +
   geom_density(aes(fill = as.factor(treat)), alpha = .9) +
-  facet_wrap(~measure, scales = "free_x") +
+  facet_wrap(~measure, scales = "free") +
   scale_fill_manual(values = c("darkblue", "cornflowerblue")) +
   labs(title = "Patient Distribution by Treatment", subtitle = "Values from week 0",
        fill = "Treatment") +
@@ -146,9 +151,15 @@ Based on these values the treatment looks to be well randomized
 ## Methods
 
 1. Difference-in-Difference (DID)
-2. IP-weighted DID
+2. IP-weighting
 
 > Consider differences from week 0 to week 6 as well as week 2 to week 6 due to the crossover observed at week 2.
+
+## Assumptions
+
+- SUTVA: Clinical trial randomization should keep patients independent.
+- Positivity: Good randomization variable levels across treatment group, probability of treatment is between 0 and 1.
+- Parallel trends: Looking back at week 0 to week 1 differences appear parallel. If there is a potential lag for drug to kick in, this shows parallel trends. 
 
 ## Difference-in-Difference (DID) {.smaller}
 
@@ -185,7 +196,11 @@ tbl_regression(did_last)
 
 ## IP-weighting
 
+- Across the full length of study the iteration between treatment and time is significant estimated to be -0.59
+- No significant estimate for weeks 2 to 6
 
+:::{.columns}
+::::{.column width="50%"}
 ```{r}
 
 ps_mod <- complete_case |> 
@@ -194,12 +209,14 @@ ps_mod <- complete_case |>
 
 ps <- as.numeric(predict(ps_mod, type = "response"))
 
-wls <- lm(score ~ treat + week + DID, 
+wls <- lm(score ~ treat + week + treat*week, 
               data = complete_data, weights = ps)
 
 tbl_regression(wls)
 ```
+::::
 
+::::{.column width="50%"}
 ```{r}
 
 ps_mod <- complete_case |> 
@@ -210,11 +227,13 @@ ps <- as.numeric(predict(ps_mod, type = "response"))
 
 wls <- complete_case |> 
   filter(week %in% c(2, 6)) |> 
-  lm(score ~ treat + week + DID, 
+  lm(score ~ treat + week + treat*week, 
               data = _, weights = ps)
 
 tbl_regression(wls)
 ```
+::::
+:::
 
 # Imputed Data
 
@@ -246,43 +265,118 @@ new_data |>
   theme(legend.position = "bottom")
 ```
 
-## Imputed DID
-
-Using DID we can estimate the causal effect using the differences of treated and untreated at week 1 and week 6.
-
-- The DID estimator is not significant with an estimated 95% CI of -1.0 to 0.36
+## Imputed Trends
 
 ```{r}
-#| tbl-cap: "Difference in difference regression estimates with imputed values"
+#| fig-align: "center"
+
+new_data |> 
+  ggplot(aes(x = week, y = score, color = as.factor(treat))) +
+  geom_jitter(width = 0.15) +
+  geom_smooth(se = FALSE) +
+  scale_color_manual(values = c("forestgreen", "sandybrown")) +
+  labs(title = "Trend lines by treatment group", subtitle = "With imputed values",
+       color = "Treatment") +
+  theme(legend.position = "bottom")
+```
+
+## Imputed DID {.smaller}
+
+- The DID estimator is significant with an estimated 95% CI of -1.0 to -0.07 over the full length of the study
+- When narrowing down to weeks 2 to 6 we see a not significant estimate
+
+:::{.columns}
+::::{.column width="50%"}
+```{r}
+#| tbl-cap: "Difference in difference regression estimates with imputed values weeks 0 to 6"
 
 
 
 did_reg <- new_data |> 
-  filter(week %in% c(1, 6)) |>
+  filter(week %in% c(0, 6)) |>
   mutate("DID" = treat * week) |> 
   lm(score ~ treat + week + DID, 
               data = _)
 
 tbl_regression(did_reg)
 ```
+::::
+
+::::{.column width="50%"}
+```{r}
+#| tbl-cap: "Difference in difference regression estimates with imputed values weeks 2 to 6"
+
+
+
+did_reg <- new_data |> 
+  filter(week %in% c(2, 6)) |>
+  mutate("DID" = treat * week) |> 
+  lm(score ~ treat + week + DID, 
+              data = _)
+
+tbl_regression(did_reg)
+```
+::::
+:::
 
 ## Imputed IP-weighting
 
+- Using IPTW for to estimate the treatment effect over the course of the study and the latter part of the study
+    - Significant across the full length of study
+    - Not significant over last 4 weeks
+
+:::{.columns}
+::::{.column width="50%"}
 ```{r}
 
 ps_mod_i <- new_data |> 
-  filter(week %in% c(1, 6)) |> 
+  filter(week %in% c(0, 6)) |> 
   glm(treat ~ sex + base, family = "binomial", data = _)
 
 ps_i <- as.numeric(predict(ps_mod_i, type = "response"))
 
 wls_i <- new_data |> 
-  filter(week %in% c(1, 6)) |> 
-  mutate("DID" = treat * week) |> 
-  lm(score ~ treat + week + DID, 
+  filter(week %in% c(0, 6)) |> 
+  lm(score ~ treat + week + treat*week, 
+              data = _, weights = ps_i)
+
+tbl_regression(wls_i)
+```
+::::
+
+::::{.column width="50%"}
+```{r}
+
+ps_mod_i <- new_data |> 
+  filter(week %in% c(2, 6)) |> 
+  glm(treat ~ sex + base, family = "binomial", data = _)
+
+ps_i <- as.numeric(predict(ps_mod_i, type = "response"))
+
+wls_i <- new_data |> 
+  filter(week %in% c(2, 6)) |> 
+  lm(score ~ treat + week + treat*week, 
               data = _, weights = ps_i)
 
 tbl_regression(wls_i)
 ```
 
+::::
+:::
 
+## Conclusion
+
+- We see that using imputation provides similar estimates of the ATT compared to complete case analysis
+    - Using DID we saw estimates of -0.51 for complete case and -0.54 with imputed data
+    - Using IPTW we saw -0.59 and -0.61 for complete case and imputation
+- At the 5% significance level the DID results were not significant in complete case
+
+## Discussion
+
+- Overall the analysis doesn't change much from complete case to imputed value
+    - Estimated change slightly
+    - Some improvement in significance is gained
+- IPTW was significant in both cases providing similar results
+    - Appears to be more robust to missing values
+
+## References
