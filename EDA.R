@@ -58,3 +58,6 @@ na_tab <- longi_score |>
 na_tab |> 
   ggplot(aes(x = week, y = missing)) +
   geom_col()
+
+dim(longi_score)
+dim(na.omit(longi_score))

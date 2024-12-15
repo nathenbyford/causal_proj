@@ -1,12 +1,18 @@
 ---
-title: "Estimating how Missing Data Affects Causal Inference with Diff-in-Diff and IP-weighting"
+title: "Estimating Missing Data's Effects on Causal Inference with Diff-in-Diff and IP-weighting"
 author: "Nathen Byford"
 date: "`r Sys.Date()`"
 output: pdf_document
+bibliography: clinical_missing.bib
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse); theme_set(theme_bw())
+longi_score <- read_csv("data/longi_score_real_data.csv")
+
+complete_case <- read_csv("data/complete_case.csv")
 ```
 
 # Introduction
@@ -18,11 +24,77 @@ In causal inference the issue of missing data is no different, there can be unin
 
 ## Missingness in Data
 
-It is important to understand the different types of missing data that can emerge in studies. Missingess can be grouped into 3 main categories; Missing Completely at Random (MCAR), Missing at Random (MAR), and Missing Not at Random (MNAR).
+It is important to understand the different types of missing data that can emerge in studies. Missingness can be grouped into 3 main categories; Missing Completely at Random (MCAR), Missing at Random (MAR), and Missing Not at Random (MNAR) @little_statistical_2019. The best case for missing data is that it is MCAR meaning that the data are missing with no pattern or undying process. Because MCAR data are assumed to be missing at random, using complete case analysis with classical statistical methods do not induce bias. Missing at random behind MCAR in the fact that it may be caused by something, but complete case or simple data imputation will produce similar results. MNAR is the worst case when there is some underlying process causing the missingness and a pattern to the missing data. In this case a stronger imputation method is required to reduce bias compared to complete case analysis which is not recommended for MCAR data.
 
 # Methods
 
-# Analysis Results
+This study looks into the differences in the estimated treatment effect for compete case analysis in MNAR data compared to the imputed data estimated treatment effects. The following subsections go into detail about the methods of data imputation and causal inference to estimate the treatment effect.
+
+## Data Imputation
+
+Using Machine Learning techniques @haliduola_missing_2022 are able to impute MNAR data from a clinical trial for anxiety medication. The first step of the imputation was to cluster the data by tox response. This response curve is used to group better understand the differences between subjects based on their initial and continued response to the drug. Due to the time component of the data a recursive neural network was utilized in the data imputation. In addition due to the small sample size of some cluster over sampling was used in the training dataset. Because of this method, the data that are MNAR can be imputed with minimal loss of information and induced bias.
+
+## Causal Inference Methods
+
+Two causal inference methods will be used to estimate the treatment effect of the anxiety drug from the baseline checkup to the final checkup. The two methods that will be tested are difference in difference (Diff-in-Diff) and IP-weighting. Both methods estimate the average treatment effect over time assusing that the assumptions hold. 
+
+
+# Analysis 
+
+## Exploratory Data Analysis
+
+The response variable is based on the Hamilton Anxiety Rating Scale (HAMA), therefore a lower score represents a better response. These scores where observed at a baseline at week 0 and then after treatment at week 1, 2, 4, and 6. Below in figure 1 we can see the scores of each subject at each checkup, untreated is on the left and treated subjects are on the right. The observations shown as a red "X" are ones that contain missing score values.
+
+```{r, fig.align='center', fig.height=3, fig.width=5, message=FALSE, warning=FALSE}
+
+longi_score |> 
+  mutate(
+    "Incomplete" = ifelse(id %in% complete_case$id, FALSE, TRUE)
+  ) |> 
+  ggplot(aes(x = week, y = score)) +
+  geom_jitter(aes(shape = Incomplete, color = Incomplete), width = .15) +
+  geom_smooth() +
+  facet_wrap(~treat) +
+  scale_color_manual(values = c("black", "red")) +
+  scale_shape_manual(values = c(16, 4)) +
+  labs(title = "Weekly Response with all Observed Values") +
+  theme(legend.position = "bottom")
+```
+
+```{r, warning=FALSE}
+longi_score |> 
+  summarise(
+    `NA count` = sum(is.na(score)),
+    .by = treat
+  ) |> 
+  rename("Treatment" = treat) |> 
+  flextable::flextable()
+```
+
+
+```{r, warning=FALSE}
+longi_score |> 
+  summarise(
+    `NA count` = sum(is.na(score)),
+    .by = week
+  ) |> 
+  rename("Week" = week) |> 
+  flextable::flextable()
+```
+
+
+## Complete Case analysis
+
+Using the complete cases in the dataset 80 observations are lost due to missing response values. 
+
+
+## Imputed Values analysis
+
 
 # Conclusion and Discussion
 
+
+\newpage
+# References
+
+<div id="refs"></div>
