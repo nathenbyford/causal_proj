@@ -333,16 +333,23 @@ tbl_regression(did_reg)
 ::::{.column width="50%"}
 ```{r}
 
+new_dat <- new_data |> 
+  filter(week %in% c(0, 6))
+
 ps_mod_i <- new_data |> 
   filter(week %in% c(0, 6)) |> 
   glm(treat ~ sex + base, family = "binomial", data = _)
 
 ps_i <- as.numeric(predict(ps_mod_i, type = "response"))
 
+w_i <- if_else(
+  new_dat$treat == 1, ps_i, 1 - ps_i
+)
+
 wls_i <- new_data |> 
   filter(week %in% c(0, 6)) |> 
   lm(score ~ treat + week + treat*week, 
-              data = _, weights = ps_i)
+              data = _, weights = w_i)
 
 tbl_regression(wls_i)
 ```
@@ -372,7 +379,7 @@ tbl_regression(wls_i)
 
 - We see that using imputation provides similar estimates of the ATT compared to complete case analysis
     - Using DID we saw estimates of -0.51 for complete case and -0.54 with imputed data
-    - Using IPTW we saw -0.59 and -0.61 for complete case and imputation
+    - Using IPTW we saw -0.58 and -0.61 for complete case and imputation
 - At the 5% significance level the DID results were not significant in complete case
 
 ## Discussion

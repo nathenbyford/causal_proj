@@ -34,7 +34,7 @@ This study looks into the differences in the estimated treatment effect for comp
 
 ## Data Imputation
 
-Using Machine Learning techniques @haliduola_missing_2022 are able to impute MNAR data from a clinical trial for anxiety medication. The first step of the imputation was to cluster the data by tox response. This response curve is used to group better understand the differences between subjects based on their initial and continued response to the drug. Due to the time component of the data a recursive neural network was utilized in the data imputation. In addition due to the small sample size of some cluster over sampling was used in the training dataset. Because of this method, the data that are MNAR can be imputed with minimal loss of information and induced bias.
+Using Machine Learning techniques @haliduola_missing_2022 are able to impute MNAR data from a clinical trial for anxiety medication. The first step of the imputation was to cluster the data by drug response. This response curve is used to group better understand the differences between subjects based on their initial and continued response to the drug. Due to the time component of the data a recursive neural network was utilized in the data imputation. In addition due to the small sample size of some cluster over sampling was used in the training dataset. Because of this method, the data that are MNAR can be imputed with minimal loss of information and induced bias.
 
 ![Data Imputation Process](bimj2344-fig-0002-m.jpg){width=60%}
 
@@ -65,12 +65,12 @@ longi_score |>
   theme(legend.position = "none")
 ```
 
-In the following tables we can see how these missing scores are distributed. We can see in table 3 the split of the missing values between treated and untreated. The split is fairly even with 38 missing scores in the treatment group and 42 missing scores in the untreated group. We can see that there is slightly more missing values in the untreated group. Looking in table 4 the missing values incease as time goes on in the study. This is possibly due to the drug potentially not working or even the oposite. This time related missingness is a sign that there can be a reason the data are missing and a pattern that could be causing the missing.
+In the following tables we can see how these missing scores are distributed. We can see in table 3 the split of the missing values between treated and untreated. The split is fairly even with 38 missing scores in the treatment group and 42 missing scores in the untreated group. We can see that there is slightly more missing values in the untreated group. Looking in table 4 the missing values increase as time goes on in the study. This is possibly due to the drug potentially not working or even the opposite. This time related missingness is a sign that there can be a reason the data are missing and a pattern that could be causing the missing.
 
 
 ## Complete Case analysis
 
-Using the complete cases in the dataset 80 observations are lost due to missing response values. Using complete case analysis will most likely result in biased estimated due to the previously mentioned MNAR nature of the data. The goal of causal inerence is to estiamte the average treatement effect and doing so often includes estimating counterfactual outcomes. The estimated values of the counterfactual outcome may be biased by the missing information in the missing data. More sophisticated causal inference methods account for the fact that the counterfactuals are missing themeselves and may have less bias estimates.
+Using the complete cases in the dataset 80 observations are lost due to missing response values. Using complete case analysis will most likely result in biased estimated due to the previously mentioned MNAR nature of the data. The goal of causal inference is to estimate the average treatment effect and doing so often includes estimating counter factual outcomes. The estimated values of the counter factual outcome may be biased by the missing information in the missing data. More sophisticated causal inference methods account for the fact that the counter factuals are missing themselves and may have less bias estimates.
 
 The first method used is Diff-in-Diff, this method relies on the assumptions that the treatment and control are similar with parallel trends in the outcome. In figure 3 the trend lines for the complete case analysis can be seen. Most importantly we can see that the trend lines from baseline to week 1 are parallel, if there is some period before the drug takes effect this provides evidence that the parallel trends assumption is correct. Additionally Knowing that the data comes from a clinical trial we can say that the the treatment and control were most likely well randomized.
 
@@ -79,7 +79,7 @@ Fitting the Diff-in-Diff model the results are shown in table 1 are not signific
 The next method tested was IP-weighting, this method relies on the additional assumption of positivity. Calculating the weights results all positive values between 0 and 1 satisfying positivity. The results for IP-weighting are shown in table 2. In this table we have the treatment variable, week/time variable, and interaction term between the two. This interaction term is what provides an estimate of the ATE.
 
 \newpage
-```{r}
+```{r, message=FALSE}
 
 complete_data <- complete_case |> 
   filter(week %in% c(0, 6))
@@ -91,7 +91,7 @@ tbl_regression(did_reg) |>
   modify_caption(caption = "Difference in difference estimates week 0 to 6")
 ```
 
-```{r}
+```{r, message=FALSE}
 ps_mod <- complete_case |> 
   filter(week %in% c(0, 6)) |> 
   glm(treat ~ sex + base, family = "binomial", data = _)
@@ -111,7 +111,13 @@ tbl_regression(wls) |>
 
 ## Imputed Values analysis
 
-After imputing the missing values using the machine learning method, the same causal inference methods are applied to the imputed dataset to determine how missing data effect these methods. These imputed values can be seen in figure 4.
+After imputing the missing values using the machine learning approach, the same causal inference methods are applied to the imputed dataset to assess how imputing missing data affects the analysis. These imputed values can be seen in figure 4 along with their trend lines. The imputed values has a more conservative trend line with some more higher HAMA scores at time points 4 and 6.
+
+For the Diff-in-Diff analysis Table 3, the treatment effect estimate (DID) for weeks 0 to 6 was -0.54, with a 95% confidence interval of -1.0 to -0.07. This interval excludes zero, indicating a significant treatment effect at the 5% level (p = 0.025). Compared to the complete case analysis, the confidence interval is narrower, suggesting improved precision in the estimate due to the inclusion of imputed data.
+
+Similarly, the IP-weighting results Table 4 show an interaction term estimate of -0.61 (95% CI: -1.1 to -0.14), which is also statistically significant (p = 0.011). This represents a slight change from the complete case analysis, where the interaction term was estimated at -0.58 with a wider confidence interval of -1.1 to -0.05. The narrower confidence intervals observed with the imputed dataset highlight the advantage of leveraging machine learning techniques to handle MNAR data, as the imputed values increase the information available for analysis and reduce variability in the estimates.
+
+The imputed data results demonstrate the potential for more accurate and reliable causal inference when missing data is accounted for, particularly in scenarios where missingness is not completely at random. This underscores the importance of adopting advanced imputation methods in studies with substantial missingness to minimize bias and improve the robustness of findings.
 
 ```{r, message=FALSE}
 imput_data <- read_csv("data/pred_real_data.csv")
@@ -129,19 +135,19 @@ new_data <- left_join(longi_score, imputed_values, by = c("id", "week")) |>
 
 
 \newpage
-```{r}
+```{r, message=FALSE}
 
-did_reg <- new_data |> 
+did_reg_i <- new_data |> 
   filter(week %in% c(0, 6)) |>
   mutate("DID" = treat * week) |> 
   lm(score ~ treat + week + DID, 
               data = _)
 
-tbl_regression(did_reg) |> 
+tbl_regression(did_reg_i) |> 
   modify_caption(caption = "Difference in difference estimates with imputed values weeks 0 to 6")
 ```
 
-```{r}
+```{r, message=FALSE}
 
 ps_mod_i <- new_data |> 
   filter(week %in% c(0, 6)) |> 
@@ -167,11 +173,33 @@ tbl_regression(wls_i) |>
 
 # Conclusion and Discussion
 
-The analysis highlights the impact of missing data on causal inference estimates and the benefits of using imputation methods to address MNAR data. When comparing the results from complete case analysis (Tables 1 and 2) with those from the imputed dataset (Tables 3 and 4), several key differences emerge. For both Difference-in-Difference (Diff-in-Diff) and IP-weighting, the imputed dataset yields slightly different point estimates. For instance, the estimated treatment effect from Diff-in-Diff changed marginally from -0.51 (95% CI: -1.1, 0.03) to -0.54 (95% CI: -1.0, -0.07). Similarly, for IP-weighting, the interaction term's estimate shifted from -0.58 (95% CI: -1.1, -0.05) to -0.61 (95% CI: -1.1, -0.14).
+The analysis highlights the impact of missing data on causal inference estimates and the benefits of using imputation methods to address MNAR data. When comparing the results from complete case analysis (Tables 1 and 2) with those from the imputed dataset (Tables 3 and 4), several key differences emerge. These values are also provided in table 5 for easy comparison. For both Difference-in-Difference (Diff-in-Diff) and IP-weighting, the imputed dataset yields slightly different point estimates. For instance, the estimated treatment effect from Diff-in-Diff changed marginally from -0.51 (95% CI: -1.1, 0.03) to -0.54 (95% CI: -1.0, -0.07). Similarly, for IP-weighting, the interaction term's estimate shifted from -0.58 (95% CI: -1.1, -0.05) to -0.61 (95% CI: -1.1, -0.14).
 
 More notably, the confidence intervals in the imputed dataset are narrower across both methods. This suggests that imputing the missing data reduces the variability in the estimates, likely by leveraging the additional information provided by the machine learning imputation process. For example, the confidence interval for the Diff-in-Diff treatment effect became tighter, providing greater precision and allowing significance to be detected at the 5% level (p = 0.025). These narrower intervals indicate increased statistical power when accounting for missing data, underscoring the value of sophisticated imputation techniques in handling MNAR scenarios.
 
-Overall, the results demonstrate that complete case analysis risks bias and reduced precision due to the exclusion of incomplete observations. By contrast, imputation improves both the validity and reliability of causal effect estimates. These findings emphasize the importance of employing advanced data imputation strategies in studies with substantial missingness, particularly when the missing data mechanism is not random. Future research should explore the generalizability of these methods across different datasets and consider alternative imputation approaches to further refine causal inference under MNAR conditions.
+Overall, the results demonstrate that complete case analysis risks bias and reduced precision due to the exclusion of incomplete observations. By contrast, imputation improves both the validity and reliability of causal effect estimates. These findings emphasize the importance of employing advanced data imputation strategies in studies with substantial missingness, particularly when the missing data mechanism is not random.
+
+```{r}
+tibble(
+  Data = c("Complete Case", "", "Imputed Data", ""),
+  Method = rep(c("Diff-in-Diff", "IW-Weighting"), 2),
+  ATE = c(did_reg$coefficients[4], wls$coefficients[4], did_reg_i$coefficients[4], wls_i$coefficients[4]),
+  `95% CI` = c(
+    str_c(round(confint(did_reg)[4,1], 2), round(confint(did_reg)[4,2], 2), sep = ", "),
+    str_c(round(confint(wls)[4,1], 2), round(confint(wls)[4,2], 2), sep = ", "),
+    str_c(round(confint(did_reg_i)[4,1], 2), round(confint(did_reg_i)[4,2], 2), sep = ", "),
+    str_c(round(confint(wls_i)[4,1], 2), round(confint(wls_i)[4,2], 2), sep = ", ")
+  ),
+  "p-value" = c(
+    summary(did_reg)$coefficients[4,4],
+    summary(wls)$coefficients[4,4],
+    summary(did_reg_i)$coefficients[4,4],
+    summary(wls_i)$coefficients[4,4]
+  )
+) |> 
+  knitr::kable(digits = 2, caption = "Estimates from all methods")
+```
+
 
 \newpage
 # References
