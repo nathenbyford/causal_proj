@@ -40,7 +40,7 @@ Using Machine Learning techniques @haliduola_missing_2022 are able to impute MNA
 
 ## Causal Inference Methods
 
-Two causal inference methods will be used to estimate the treatment effect of the anxiety drug from the baseline checkup to the final checkup. The two methods that will be tested are difference in difference (Diff-in-Diff) and IP-weighting. Both methods estimate the average treatment effect over time assusing that the assumptions hold. 
+Two causal inference methods will be used to estimate the treatment effect of the anxiety drug from the baseline checkup to the final checkup. Difference-in-Difference (Diff-in-Diff) and Inverse Probability Weighting (IP-weighting) are two widely used methods for estimating the average treatment effect (ATE) in causal inference. Diff-in-Diff compares changes in outcomes over time between treated and untreated groups, leveraging the assumption that trends would have been parallel in the absence of treatment. This method is particularly useful when pre-treatment data are available and helps account for time-invariant confounding. IP-weighting, on the other hand, uses propensity scores to create a pseudo-population where the treatment assignment is independent of observed covariates, thereby adjusting for potential confounding. Combining these methods can provide complementary insights: Diff-in-Diff focuses on changes over time while IP-weighting ensures balance in baseline characteristics, offering a robust approach to estimating the ATE in the presence of complex data structures or confounding variables.
 
 
 # Analysis 
@@ -65,9 +65,124 @@ longi_score |>
   theme(legend.position = "none")
 ```
 
-In the following tables we can see how these missing scores are distributed. We can see in table 1 the split of the missing values between treated and untreated. The split is fairly even with 38 missing scores in the treatment group and 42 missing scores in the untreated group. We can see that there is slightly more missing values in the untreated group. Looking in table 2 the missing values incease as time goes on in the study. This is possibly due to the drug potentially not working or even the oposite. This time related missingness is a sign that there can be a reason the data are missing and a pattern that could be causing the missing.
+In the following tables we can see how these missing scores are distributed. We can see in table 3 the split of the missing values between treated and untreated. The split is fairly even with 38 missing scores in the treatment group and 42 missing scores in the untreated group. We can see that there is slightly more missing values in the untreated group. Looking in table 4 the missing values incease as time goes on in the study. This is possibly due to the drug potentially not working or even the oposite. This time related missingness is a sign that there can be a reason the data are missing and a pattern that could be causing the missing.
 
-```{r, warning=FALSE}
+
+## Complete Case analysis
+
+Using the complete cases in the dataset 80 observations are lost due to missing response values. Using complete case analysis will most likely result in biased estimated due to the previously mentioned MNAR nature of the data. The goal of causal inerence is to estiamte the average treatement effect and doing so often includes estimating counterfactual outcomes. The estimated values of the counterfactual outcome may be biased by the missing information in the missing data. More sophisticated causal inference methods account for the fact that the counterfactuals are missing themeselves and may have less bias estimates.
+
+The first method used is Diff-in-Diff, this method relies on the assumptions that the treatment and control are similar with parallel trends in the outcome. In figure 3 the trend lines for the complete case analysis can be seen. Most importantly we can see that the trend lines from baseline to week 1 are parallel, if there is some period before the drug takes effect this provides evidence that the parallel trends assumption is correct. Additionally Knowing that the data comes from a clinical trial we can say that the the treatment and control were most likely well randomized.
+
+Fitting the Diff-in-Diff model the results are shown in table 1 are not significant at the 5% significance level. What we do see is a a slight decrease in the score for the treated group compared to the control group. The 95% confidence interval for the ATE, shown as DID, is between -1.1 and 0.003. This interval includes 0 so we cannot state that the ATE is not 0 at this significance level.
+
+The next method tested was IP-weighting, this method relies on the additional assumption of positivity. Calculating the weights results all positive values between 0 and 1 satisfying positivity. The results for IP-weighting are shown in table 2. In this table we have the treatment variable, week/time variable, and interaction term between the two. This interaction term is what provides an estimate of the ATE.
+
+\newpage
+```{r}
+
+complete_data <- complete_case |> 
+  filter(week %in% c(0, 6))
+
+did_reg <- lm(score ~ treat + week + DID, 
+              data = complete_data)
+
+tbl_regression(did_reg) |> 
+  modify_caption(caption = "Difference in difference estimates week 0 to 6")
+```
+
+```{r}
+ps_mod <- complete_case |> 
+  filter(week %in% c(0, 6)) |> 
+  glm(treat ~ sex + base, family = "binomial", data = _)
+
+ps <- as.numeric(predict(ps_mod, type = "response"))
+
+w <- if_else(
+  complete_data$treat == 1, ps, 1 - ps
+)
+
+wls <- lm(score ~ treat + week + treat*week, 
+              data = complete_data, weights = w)
+
+tbl_regression(wls) |> 
+  modify_caption(caption = "IP-weighting Estimates week 0 to 6")
+```
+
+## Imputed Values analysis
+
+After imputing the missing values using the machine learning method, the same causal inference methods are applied to the imputed dataset to determine how missing data effect these methods. These imputed values can be seen in figure 4.
+
+```{r, message=FALSE}
+imput_data <- read_csv("data/pred_real_data.csv")
+
+imputed_values <- imput_data |> 
+  summarise(
+    value = mean(predict),
+    .by = c(id, week)
+  )
+
+new_data <- left_join(longi_score, imputed_values, by = c("id", "week")) |> 
+  mutate(score = if_else(is.na(score), value, score)) |> 
+  select(-value)
+```
+
+
+\newpage
+```{r}
+
+did_reg <- new_data |> 
+  filter(week %in% c(0, 6)) |>
+  mutate("DID" = treat * week) |> 
+  lm(score ~ treat + week + DID, 
+              data = _)
+
+tbl_regression(did_reg) |> 
+  modify_caption(caption = "Difference in difference estimates with imputed values weeks 0 to 6")
+```
+
+```{r}
+
+ps_mod_i <- new_data |> 
+  filter(week %in% c(0, 6)) |> 
+  glm(treat ~ sex + base, family = "binomial", data = _)
+
+new_dat <- new_data |> 
+  filter(week %in% c(0, 6))
+
+ps_i <- as.numeric(predict(ps_mod_i, type = "response"))
+
+w_i <- if_else(
+  new_dat$treat == 1, ps_i, 1 - ps_i
+)
+
+wls_i <- new_data |> 
+  filter(week %in% c(0, 6)) |> 
+  lm(score ~ treat + week + treat*week, 
+              data = _, weights = w_i)
+
+tbl_regression(wls_i) |> 
+  modify_caption(caption = "IP-weighting estimates with imputed values weeks 0 to 6")
+```
+
+# Conclusion and Discussion
+
+The analysis highlights the impact of missing data on causal inference estimates and the benefits of using imputation methods to address MNAR data. When comparing the results from complete case analysis (Tables 1 and 2) with those from the imputed dataset (Tables 3 and 4), several key differences emerge. For both Difference-in-Difference (Diff-in-Diff) and IP-weighting, the imputed dataset yields slightly different point estimates. For instance, the estimated treatment effect from Diff-in-Diff changed marginally from -0.51 (95% CI: -1.1, 0.03) to -0.54 (95% CI: -1.0, -0.07). Similarly, for IP-weighting, the interaction term's estimate shifted from -0.58 (95% CI: -1.1, -0.05) to -0.61 (95% CI: -1.1, -0.14).
+
+More notably, the confidence intervals in the imputed dataset are narrower across both methods. This suggests that imputing the missing data reduces the variability in the estimates, likely by leveraging the additional information provided by the machine learning imputation process. For example, the confidence interval for the Diff-in-Diff treatment effect became tighter, providing greater precision and allowing significance to be detected at the 5% level (p = 0.025). These narrower intervals indicate increased statistical power when accounting for missing data, underscoring the value of sophisticated imputation techniques in handling MNAR scenarios.
+
+Overall, the results demonstrate that complete case analysis risks bias and reduced precision due to the exclusion of incomplete observations. By contrast, imputation improves both the validity and reliability of causal effect estimates. These findings emphasize the importance of employing advanced data imputation strategies in studies with substantial missingness, particularly when the missing data mechanism is not random. Future research should explore the generalizability of these methods across different datasets and consider alternative imputation approaches to further refine causal inference under MNAR conditions.
+
+\newpage
+# References
+
+<div id="refs"></div>
+
+# Appendix
+
+## A1: EDA
+
+```{r, warning=FALSE, tab.cap="Missing Values by Treatment"}
 longi_score |> 
   summarise(
     `NA count` = sum(is.na(score)),
@@ -78,7 +193,7 @@ longi_score |>
 ```
 
 
-```{r, warning=FALSE}
+```{r, warning=FALSE, tab.cap="Missing Values by Week"}
 longi_score |> 
   summarise(
     `NA count` = sum(is.na(score)),
@@ -88,14 +203,10 @@ longi_score |>
   flextable::flextable()
 ```
 
-
-## Complete Case analysis
-
-Using the complete cases in the dataset 80 observations are lost due to missing response values. Using complete case analysis will most likely result in biased estimated due to the previously mentioned MNAR nature of the data. The goal of causal inerence is to estiamte the average treatement effect and doing so often includes estimating counterfactual outcomes. The estimated values of the counterfactual outcome may be biased by the missing information in the missing data. More sophisticated causal inference methods account for the fact that the counterfactuals are missing themeselves and may have less bias estimates.
-
-The first method used is Diff-in-Diff, this method relies on the assumptions that the treatment and control are similar with parallel trends in the outcome. In figure 3 the trend lines for the complete case analysis can be seen. Most importantly we can see that the trend lines from baseline to week 1 are parallel, if there is some period before the drug takes effect this provides evidence that the parallel trends assumption is correct. Additionally Knowing that the data comes from a clinical trial we can say that the the treatment and control were most likely well randomized.
-
 \newpage
+
+## A2: Complete case analysis
+
 ```{r, message=FALSE, warning=FALSE, fig.width=5, fig.height=2.5, fig.align='center', fig.cap="Treatment and Controll Trend Lines by Week"}
 complete_case |> 
   ggplot(aes(x = week, y = score, color = as.factor(treat))) +
@@ -105,28 +216,19 @@ complete_case |>
   labs(title = "Trend lines by treatment group", color = "Treatment")
 ```
 
-Fitting the Diff-in-Diff model the results are shownin table __
+## A3: Imputed Data
 
-```{r, tab.cap="Difference in difference estimates week 0 to 6"}
+```{r, message=FALSE, warning=FALSE, fig.width=5, fig.height=3, fig.align='center', fig.cap="Plot of imputed data values and trend"}
 
-complete_data <- complete_case |> 
-  filter(week %in% c(0, 6))
-
-did_reg <- lm(score ~ treat + week + DID, 
-              data = complete_data)
-
-tbl_regression(did_reg)
+new_data |> 
+  ggplot(aes(x = week, y = score)) +
+  geom_jitter(width = .15) +
+  geom_smooth(aes(color = "Imputed"), se = FALSE) +
+  geom_smooth(data = longi_score, se = FALSE, aes(color = "Complete case")) +
+  facet_wrap(~treat) +
+  labs(title = "Weekly Response with Imputed Values",
+       color = "Line") +
+  scale_color_manual(values = c("cornflowerblue", "forestgreen")) +
+  theme(legend.position = "bottom")
 ```
 
-
-
-## Imputed Values analysis
-
-
-# Conclusion and Discussion
-
-
-\newpage
-# References
-
-<div id="refs"></div>

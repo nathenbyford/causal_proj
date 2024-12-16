@@ -209,8 +209,12 @@ ps_mod <- complete_case |>
 
 ps <- as.numeric(predict(ps_mod, type = "response"))
 
+w <- if_else(
+  complete_data$treat == 1, ps, 1 - ps
+)
+
 wls <- lm(score ~ treat + week + treat*week, 
-              data = complete_data, weights = ps)
+              data = complete_data, weights = w)
 
 tbl_regression(wls)
 ```
