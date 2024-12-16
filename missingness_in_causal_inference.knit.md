@@ -1,21 +1,12 @@
 ---
 title: "Estimating Missing Data's Effects on Causal Inference with Diff-in-Diff and IP-weighting"
 author: "Nathen Byford"
-date: "`r Sys.Date()`"
+date: "2024-12-16"
 output: pdf_document
 bibliography: clinical_missing.bib
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
 
-library(tidyverse); theme_set(theme_bw())
-library(gtsummary)
-
-longi_score <- read_csv("data/longi_score_real_data.csv")
-
-complete_case <- read_csv("data/complete_case.csv")
-```
 
 # Introduction
 
@@ -49,43 +40,148 @@ Two causal inference methods will be used to estimate the treatment effect of th
 
 The response variable is based on the Hamilton Anxiety Rating Scale (HAMA), therefore a lower score represents a better response. These scores where observed at a baseline at week 0 and then after treatment at week 1, 2, 4, and 6. Below in figure 2 we can see the scores of each subject at each checkup, untreated is on the left and treated subjects are on the right. The observations shown as a red "X" are ones that contain missing score values. There are 80 missing scores in the dataset.
 
-```{r, fig.align='center', fig.height=2.5, fig.width=5, message=FALSE, warning=FALSE, fig.cap="Observed responses by Week"}
+\begin{figure}
 
-longi_score |> 
-  mutate(
-    "Incomplete" = ifelse(id %in% complete_case$id, FALSE, TRUE)
-  ) |> 
-  ggplot(aes(x = week, y = score)) +
-  geom_jitter(aes(shape = Incomplete, color = Incomplete), width = .15) +
-  geom_smooth() +
-  facet_wrap(~treat) +
-  scale_color_manual(values = c("black", "red")) +
-  scale_shape_manual(values = c(16, 4)) +
-  labs(title = "Weekly Response with all Observed Values") +
-  theme(legend.position = "none")
-```
+{\centering \includegraphics{missingness_in_causal_inference_files/figure-latex/unnamed-chunk-1-1} 
+
+}
+
+\caption{Observed responses by Week}\label{fig:unnamed-chunk-1}
+\end{figure}
 
 In the following tables we can see how these missing scores are distributed. We can see in table 1 the split of the missing values between treated and untreated. The split is fairly even with 38 missing scores in the treatment group and 42 missing scores in the untreated group. We can see that there is slightly more missing values in the untreated group. Looking in table 2 the missing values incease as time goes on in the study. This is possibly due to the drug potentially not working or even the oposite. This time related missingness is a sign that there can be a reason the data are missing and a pattern that could be causing the missing.
 
-```{r, warning=FALSE}
-longi_score |> 
-  summarise(
-    `NA count` = sum(is.na(score)),
-    .by = treat
-  ) |> 
-  rename("Treatment" = treat) |> 
-  flextable::flextable()
+
+```{=latex}
+\global\setlength{\Oldarrayrulewidth}{\arrayrulewidth}
+
+\global\setlength{\Oldtabcolsep}{\tabcolsep}
+
+\setlength{\tabcolsep}{2pt}
+
+\renewcommand*{\arraystretch}{1.5}
+
+
+
+\providecommand{\ascline}[3]{\noalign{\global\arrayrulewidth #1}\arrayrulecolor[HTML]{#2}\cline{#3}}
+
+\begin{longtable}[c]{|p{0.75in}|p{0.75in}}
+
+
+
+\ascline{1.5pt}{666666}{1-2}
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{Treatment}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{NA\ count}}} \\
+
+\ascline{1.5pt}{666666}{1-2}\endfirsthead 
+
+\ascline{1.5pt}{666666}{1-2}
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{Treatment}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{NA\ count}}} \\
+
+\ascline{1.5pt}{666666}{1-2}\endhead
+
+
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{1}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{38}}} \\
+
+
+
+
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{0}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{42}}} \\
+
+\ascline{1.5pt}{666666}{1-2}
+
+
+
+\end{longtable}
+
+
+
+\arrayrulecolor[HTML]{000000}
+
+\global\setlength{\arrayrulewidth}{\Oldarrayrulewidth}
+
+\global\setlength{\tabcolsep}{\Oldtabcolsep}
+
+\renewcommand*{\arraystretch}{1}
 ```
 
 
-```{r, warning=FALSE}
-longi_score |> 
-  summarise(
-    `NA count` = sum(is.na(score)),
-    .by = week
-  ) |> 
-  rename("Week" = week) |> 
-  flextable::flextable()
+
+```{=latex}
+\global\setlength{\Oldarrayrulewidth}{\arrayrulewidth}
+
+\global\setlength{\Oldtabcolsep}{\tabcolsep}
+
+\setlength{\tabcolsep}{2pt}
+
+\renewcommand*{\arraystretch}{1.5}
+
+
+
+\providecommand{\ascline}[3]{\noalign{\global\arrayrulewidth #1}\arrayrulecolor[HTML]{#2}\cline{#3}}
+
+\begin{longtable}[c]{|p{0.75in}|p{0.75in}}
+
+
+
+\ascline{1.5pt}{666666}{1-2}
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{Week}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{NA\ count}}} \\
+
+\ascline{1.5pt}{666666}{1-2}\endfirsthead 
+
+\ascline{1.5pt}{666666}{1-2}
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{Week}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{NA\ count}}} \\
+
+\ascline{1.5pt}{666666}{1-2}\endhead
+
+
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{0}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{0}}} \\
+
+
+
+
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{1}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{0}}} \\
+
+
+
+
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{2}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{14}}} \\
+
+
+
+
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{4}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{23}}} \\
+
+
+
+
+
+\multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{6}}} & \multicolumn{1}{>{\raggedleft}m{\dimexpr 0.75in+0\tabcolsep}}{\textcolor[HTML]{000000}{\fontsize{11}{11}\selectfont{43}}} \\
+
+\ascline{1.5pt}{666666}{1-2}
+
+
+
+\end{longtable}
+
+
+
+\arrayrulecolor[HTML]{000000}
+
+\global\setlength{\arrayrulewidth}{\Oldarrayrulewidth}
+
+\global\setlength{\tabcolsep}{\Oldtabcolsep}
+
+\renewcommand*{\arraystretch}{1}
 ```
 
 
@@ -96,27 +192,32 @@ Using the complete cases in the dataset 80 observations are lost due to missing 
 The first method used is Diff-in-Diff, this method relies on the assumptions that the treatment and control are similar with parallel trends in the outcome. In figure 3 the trend lines for the complete case analysis can be seen. Most importantly we can see that the trend lines from baseline to week 1 are parallel, if there is some period before the drug takes effect this provides evidence that the parallel trends assumption is correct. Additionally Knowing that the data comes from a clinical trial we can say that the the treatment and control were most likely well randomized.
 
 \newpage
-```{r, message=FALSE, warning=FALSE, fig.width=5, fig.height=2.5, fig.align='center', fig.cap="Treatment and Controll Trend Lines by Week"}
-complete_case |> 
-  ggplot(aes(x = week, y = score, color = as.factor(treat))) +
-  geom_jitter(width = 0.15, alpha = .7) +
-  geom_smooth(se = FALSE, alpha = .7) +
-  scale_color_manual(values = c("steelblue", "goldenrod")) +
-  labs(title = "Trend lines by treatment group", color = "Treatment")
-```
+\begin{figure}
+
+{\centering \includegraphics{missingness_in_causal_inference_files/figure-latex/unnamed-chunk-4-1} 
+
+}
+
+\caption{Treatment and Controll Trend Lines by Week}\label{fig:unnamed-chunk-4}
+\end{figure}
 
 Fitting the Diff-in-Diff model the results are shownin table __
 
-```{r, tab.cap="Difference in difference estimates week 0 to 6"}
-
-complete_data <- complete_case |> 
-  filter(week %in% c(0, 6))
-
-did_reg <- lm(score ~ treat + week + DID, 
-              data = complete_data)
-
-tbl_regression(did_reg)
-```
+\begin{table}[!t]
+\fontsize{12.0pt}{14.4pt}\selectfont
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lccc}
+\toprule
+\textbf{Characteristic} & \textbf{Beta} & \textbf{95\% CI}\textsuperscript{\textit{1}} & \textbf{p-value} \\ 
+\midrule\addlinespace[2.5pt]
+treat & 1.6 & -0.69, 3.9 & 0.2 \\ 
+week & -0.86 & -1.2, -0.48 & <0.001 \\ 
+DID & -0.51 & -1.1, 0.03 & 0.063 \\ 
+\bottomrule
+\end{tabular*}
+\begin{minipage}{\linewidth}
+\textsuperscript{\textit{1}}CI = Confidence Interval\\
+\end{minipage}
+\end{table}
 
 
 
